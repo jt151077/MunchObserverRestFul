@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:View xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		xmlns:s="library://ns.adobe.com/flex/spark" actionBarVisible="false" tabBarVisible="false" backgroundColor="#666666" creationComplete="initView(event)">
+	
+	<fx:Script>
+		<![CDATA[
+			import listeners.ChooseMapEvent;
+			
+			[Embed("assets/room.jpg")] private static const room1:Class;
+			[Embed("assets/room2.jpg")] private static const room2:Class;
+			
+			import mx.events.FlexEvent;
+			protected function chooseMapHandler(n:Number):void {
+				var cme:ChooseMapEvent = new ChooseMapEvent(MunchObserver.CHOOSE_MAP, true);
+				cme.map = n;
+				dispatchEvent(cme);
+			}
+			
+			protected function initView(event:FlexEvent):void {
+				var appXml:XML = NativeApplication.nativeApplication.applicationDescriptor;
+				var ns:Namespace = appXml.namespace(); 
+				ver.text = "v: "+(appXml.ns::versionNumber).toString();
+			}
+			
+		]]>
+	</fx:Script>
+	
+	
+	<s:VGroup horizontalAlign="center" top="50" right="50" bottom="50" left="50" gap="0">
+		<s:Label text="Tap on the room where you want to be an observer." minHeight="20" width="300" fontStyle="italic" textDecoration="underline" color="#FFFFFF" fontSize="20" textAlign="center">
+			<s:filters>
+				<s:DropShadowFilter angle="45" distance="5" />
+			</s:filters>
+		</s:Label>
+		<s:HGroup height="100%" width="100%" gap="50" maxHeight="300">
+			<s:Image source="{room1}" width="100%" scaleMode="letterbox" click="chooseMapHandler(1)">
+				<s:filters>
+					<s:DropShadowFilter angle="45" distance="15" color="#444444" />
+				</s:filters>
+			</s:Image>
+			<s:Image source="{room2}" width="100%" scaleMode="letterbox" click="chooseMapHandler(2)">
+				<s:filters>
+					<s:DropShadowFilter angle="45" distance="15" color="#444444" />
+				</s:filters>
+			</s:Image>
+		</s:HGroup>
+	</s:VGroup>
+	<s:Label id="ver" fontSize="8" color="#FFFFFF" alpha=".6" bottom="2" right="2" />
+</s:View>
+ 

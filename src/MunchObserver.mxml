@@ -1,0 +1,401 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:ViewNavigatorApplication xmlns:fx="http://ns.adobe.com/mxml/2009"
+							xmlns:s="library://ns.adobe.com/flex/spark"
+							applicationComplete="initApp(event)" firstView="views.WelcomeTabView">
+	<fx:Script>
+		<![CDATA[
+			import listeners.AddMemberEvent;
+			import listeners.ChooseMapEvent;
+			import listeners.DeleteMemberEvent;
+			import listeners.DeleteMuseumEvent;
+			
+			import mx.collections.ArrayCollection;
+			import mx.events.FlexEvent;
+			
+			import spark.events.ViewNavigatorEvent;
+			import spark.transitions.SlideViewTransition;
+			import spark.transitions.ViewTransitionDirection;
+			
+			import views.EventTabView;
+			import views.GroupEditTabView;
+			import views.HomeTabView;
+			import views.WelcomeTabView;
+			
+			public static const COLOR_GROUP:Number = 0x000000;
+			private static const COLOR1:Number = 0x98C6FB;
+			private static const COLOR2:Number = 0x5BC15B;
+			private static const COLOR3:Number = 0xD23F2A;
+			private static const COLOR4:Number = 0xED8B36;
+			public var colorArray:Array;
+			
+			private static const DEBUG_MODE:Boolean = true;
+			public static const BLOB_SIDE:Number = 50;
+			
+			public static const GENRE:ArrayCollection = new ArrayCollection(["Male", "Female"]);
+			public static const AGE:ArrayCollection = new ArrayCollection(["Child", "Young adult", "Adult", "Middle aged", "Senior"]);
+			public static const ORIGIN:ArrayCollection = new ArrayCollection(["Norwegian", "Tourist", "Other"]);
+			
+			public static const ADD_MEMBER:String = "ADD_MEMBER";
+			public static const DELETE_MEMBER:String = "DELETE_MEMBER";
+			public static const START_GROUP:String = "START_GROUP";
+			public static const EXIT_GROUP:String = "EXIT_GROUP";
+			public static const DELETE_MUSEUM_EVENT:String = "DELETE_MUSEUM_EVENT";
+			public static const RESET_APP:String = "RESET_APP";
+			public static const CONFIRM_EXIT:String = "CONFIRM_EXIT";
+			public static const DEFAULT_EMAIL:String = "jt151077@gmail.com";
+			public static const DELETE_EVENT:String = "DELETE_EVENT";
+			public static const CHOOSE_MAP:String = "CHOOSE_MAP";
+			public static const SEND_MAILS:String = "SEND_MAILS";
+			
+			public static const SERVICE_URL:String = "http://localhost:4567";
+			
+			private var ppid:Number = 0;
+			
+			private var touchMoveID:int = 0;
+			private var locX:Number;
+			private var locY:Number;
+			private var displacement:Number;
+			private var swipeToGroupEnabled:Boolean = false;
+			private var swipeToEventEnabled:Boolean = false;
+			private var swipeToRoomEnabled:Boolean = false;
+			
+			private var pressTimer:Timer = new Timer(300);
+			private var longTapEnabled:Boolean;
+			//private var paths:ArrayCollection = new ArrayCollection();
+			private var visitorGroup:VisitorGroup;
+			private var contextObj:Object;
+			
+			[Bindable] private var enterLeft:Number = 190;
+			[Bindable] private var enterBottom:Number = 10;
+			[Bindable] private var exitLeft:Number = 298;
+			[Bindable] private var exitBottom:Number = 10;
+			
+			[Embed("assets/room.jpg")] private static const room1IOS:Class;
+			private static const room1LocationsIOS:Array = new Array(190,10,298,10,190,708,290,708); 	//enterleft, enterbottom, exitleft, exitbottom, startpointx, startpointy, endpointx, endpointy
+			[Embed("assets/room2.jpg")] private static const room2IOS:Class;
+			private static const room2LocationsIOS:Array = new Array(970,380,960,457,970,370,970,300); 	//enterleft, enterbottom, exitleft, exitbottom, startpointx, startpointy, endpointx, endpointy
+			
+			[Embed("assets/rooma.jpg")] private static const room1Andro:Class;
+			private static const room1LocationsAndro:Array = new Array(190,10,373,10,190,690,320,690); 	//enterleft, enterbottom, exitleft, exitbottom, startpointx, startpointy, endpointx, endpointy
+			[Embed("assets/room2a.jpg")] private static const room2Andro:Class;
+			private static const room2LocationsAndro:Array = new Array(1220,335,1220,450,1220,380,1220,300); 	//enterleft, enterbottom, exitleft, exitbottom, startpointx, startpointy, endpointx, endpointy
+			
+			private var startExitDico:Dictionary;
+			public static var para:Object;
+			private var manualReset:Boolean = false;
+			private var so:SharedObject;
+			private var ms:MailSender;
+			
+			protected function initApp(event:FlexEvent):void {
+				
+				so = SharedObject.getLocal("munchobs");
+				if(so.data.email == null) {
+					so.data.email = DEFAULT_EMAIL;
+					so.flush();
+				}
+				
+				if(so.data.cachedsessions == null) {
+					so.data.cachedsessions = new Array();
+					so.flush();
+				}
+				
+				startExitDico = new Dictionary();
+				if(isIOSDevice()) {
+					startExitDico[room1IOS] = room1LocationsIOS;
+					startExitDico[room2IOS] = room2LocationsIOS;
+				}
+				else {
+					startExitDico[room1Andro] = room1LocationsAndro;
+					startExitDico[room2Andro] = room2LocationsAndro;
+				}
+				
+				
+				para = new Object();
+				para.server = resourceManager.getString('resources', 'SMTP_SERVER');
+				para.port = resourceManager.getString('resources', 'SMTP_PORT');
+				para.login = resourceManager.getString('resources', 'SMTP_LOGIN');
+				para.pass = resourceManager.getString('resources', 'SMTP_PASSWORD');
+				
+				Multitouch.inputMode = MultitouchInputMode.TOUCH_POINT;
+				stage.addEventListener(TouchEvent.TOUCH_BEGIN, handleTouchBegin);
+				stage.addEventListener(ADD_MEMBER, handleAddGroupMember);
+				stage.addEventListener(DELETE_MEMBER, handleDeleteGroupMember);
+				stage.addEventListener(START_GROUP, handleStartGroup);
+				stage.addEventListener(DELETE_MUSEUM_EVENT, handleDeleteMuseumEvent);
+				stage.addEventListener(EXIT_GROUP, handleExitGroup);
+				stage.addEventListener(RESET_APP, handleResetApp);
+				stage.addEventListener(CONFIRM_EXIT, handleConfirmExit);
+				stage.addEventListener(DELETE_EVENT, handleDeleteEvent);
+				stage.addEventListener(CHOOSE_MAP, handleChooseMap);
+				//stage.addEventListener(SEND_MAILS, handleSendAllMails);
+				
+				if(DEBUG_MODE) {
+					stage.addEventListener(MouseEvent.MOUSE_DOWN, handleMouseDown);
+				}
+				
+				colorArray = new Array(COLOR1, COLOR2, COLOR3, COLOR4);
+				longTapEnabled = true;
+				swipeToGroupEnabled = false;
+				swipeToEventEnabled = false;
+				ppid = 0;
+				touchMoveID = 0;
+				
+				pressTimer.addEventListener(TimerEvent.TIMER, pressTimerHandler);
+				
+				if(manualReset) {
+					manualReset = false;
+					handleSwipe(3);
+				}
+			}
+			
+			private function isIOSDevice():Boolean {
+				/* var os:String = Capabilities.os.toLowerCase();
+				if(os.indexOf('iphone') != -1 || os.indexOf('ipad') != -1 || os.indexOf('ipod') != -1) {
+					return true;
+				} 
+				else {
+					return false;
+				}  */
+				
+				return true;
+			}
+			
+			/* private function handleSendAllMails(evt:Event):void {
+				var tArr:Array = so.data.cachedsessions as Array;
+				if(ms == null) {
+					ms = new MailSender(tArr);
+					ms.resumeSending();
+				}
+				else {
+					if(ms.sending) {
+						for each (var o:Object in tArr) {
+							ms.arrToSend.push(tArr.pop());
+						}	
+					}
+					else {
+						ms = new MailSender(tArr);
+						ms.resumeSending();
+					}
+				}
+				
+				so.data.cachedsessions = new Array();
+				so.flush();
+			} */
+			
+			private function handleChooseMap(evt:ChooseMapEvent):void {
+				contextObj = new Object();
+				if(evt.map == 1) {
+					if(isIOSDevice()) {
+						contextObj.map = room1IOS;
+					}
+					else {
+						contextObj.map = room1Andro;
+					}
+				}
+				else if(evt.map == 2) {
+					if(isIOSDevice()) {
+						contextObj.map = room2IOS;
+					}
+					else {
+						contextObj.map = room2Andro;
+					}
+				}
+				
+				handleSwipe(2);
+			}
+			
+			private function handleDeleteEvent(evt:Event):void {
+				if(visitorGroup.selectedMember == -1) {
+					visitorGroup.deleteLastEvent();
+				}
+				else {
+					(visitorGroup.members.getItemAt(visitorGroup.selectedMember) as GroupMember).deleteLastSpot(null);
+				}
+				
+				handleSwipe(-1);
+			}
+			
+			private function handleResetApp(evt:Event):void {
+				visitorGroup = null;
+				manualReset = true;
+				this.dispatchEvent(new FlexEvent(FlexEvent.APPLICATION_COMPLETE, true));
+			}
+			
+			private function handleDeleteGroupMember(evt:DeleteMemberEvent):void {
+				colorArray.push(evt.gm.color);
+				visitorGroup.members.removeItemAt(visitorGroup.members.getItemIndex(evt.gm));
+				checkGroupFull();
+			}
+			
+			private function handleAddGroupMember(evt:AddMemberEvent):void {
+				if(visitorGroup.members.length < 4) {
+					(evt.gm).color = colorArray.pop();
+					visitorGroup.members.addItem(evt.gm);
+				}
+				checkGroupFull();
+			}
+			
+			private function checkGroupFull():void {
+				if(visitorGroup.members.length == 4) {
+					(navigator.activeView).currentState = "groupFull";
+				}
+				else {
+					(navigator.activeView).currentState = "normal";					
+				}
+			}
+			
+			private function handleExitGroup(evt:Event):void {
+				(navigator.activeView as HomeTabView).sureToExitPop.open((navigator.activeView as HomeTabView), true);
+			}
+			
+			private function handleConfirmExit(evt:Event):void {
+				stage.removeEventListener(TouchEvent.TOUCH_BEGIN, handleTouchBegin);
+				visitorGroup.addNewGroupSpot(startExitDico[contextObj.map][6], startExitDico[contextObj.map][7]);
+				(navigator.activeView as HomeTabView).dispatchEvent(new ViewNavigatorEvent(ViewNavigatorEvent.VIEW_ACTIVATE, true));
+				visitorGroup.finishDate = new Date();
+				(navigator.activeView as HomeTabView).saveResultsPop.open((navigator.activeView as HomeTabView), true);
+			}
+			
+			private function handleDeleteMuseumEvent(evt:DeleteMuseumEvent):void {
+				(navigator.activeView as EventTabView).selectedEventTypes.removeItemAt((navigator.activeView as EventTabView).selectedEventTypes.getItemIndex(evt.museumEvent));
+			}
+			
+			private function handleStartGroup(evt:Event):void {
+				if(visitorGroup == null) {
+					visitorGroup = new VisitorGroup(contextObj, startExitDico);
+					visitorGroup.startDate = new Date();
+					swipeToGroupEnabled = true;
+				}
+				
+				handleSwipe(-1);
+			}
+			
+			private function pressTimerHandler(event:TimerEvent):void {
+				if(swipeToGroupEnabled) {
+					touchMoveID = 0;
+					if(visitorGroup.selectedMember == -1) {
+						visitorGroup.addNewGroupSpot(locX-BLOB_SIDE/2, locY-BLOB_SIDE/2);
+					}
+					else {
+						visitorGroup.addSpotToMember(locX-BLOB_SIDE/2, locY-BLOB_SIDE/2, new Date().time.toString());
+					}
+					
+					swipeToEventEnabled = true;
+					handleSwipe(1);
+				}
+			}
+			
+			private function handleMouseDown(evt:MouseEvent):void {
+				var te:TouchEvent = new TouchEvent(TouchEvent.TOUCH_BEGIN);
+				ppid = ppid + 1;
+				te.touchPointID = ppid;
+				te.isPrimaryTouchPoint = true;
+				te.localX = evt.stageX;
+				te.localY = evt.stageY;
+				stage.dispatchEvent(te);
+			} 
+			
+			private function handleMouseUp(evt:MouseEvent):void {
+				var te:TouchEvent = new TouchEvent(TouchEvent.TOUCH_END);
+				te.touchPointID = ppid;
+				te.isPrimaryTouchPoint = true;
+				te.localX = evt.stageX;
+				stage.dispatchEvent(te);
+			} 
+			
+			
+			private function handleTouchBegin(event:TouchEvent):void {
+				if(navigator.activeView is views.HomeTabView || navigator.activeView is WelcomeTabView) {
+					pressTimer.start();					
+				}
+				
+				if(touchMoveID != 0) { 
+					return; 
+				} 
+				touchMoveID = event.touchPointID; 
+				
+				if(DEBUG_MODE) {
+					locX = event.localX;
+					locY = event.localY
+					stage.addEventListener(MouseEvent.MOUSE_UP, handleMouseUp); 
+				}
+				else {
+					locX = event.stageX;	
+					locY = event.stageY;
+				}
+				
+				stage.addEventListener(TouchEvent.TOUCH_END, onTouchEnd); 
+			} 
+			
+			private function onTouchEnd(event:TouchEvent):void { 
+				pressTimer.stop();
+				if(event.touchPointID != touchMoveID) { 
+					return; 
+				} 
+				
+				touchMoveID = 0; 
+				stage.removeEventListener(TouchEvent.TOUCH_END, onTouchEnd);
+				
+				if(DEBUG_MODE) {
+					stage.removeEventListener(MouseEvent.MOUSE_UP, handleMouseUp);
+					displacement = event.localX - locX;
+				}
+				else {
+					displacement = event.stageX-locX;
+				}
+								
+				if(displacement > 30 || displacement < -30) {
+					if(displacement > 0) {
+						handleSwipe(1);
+					}
+					else {
+						handleSwipe(-1);
+					}
+				}
+			}
+			
+			private function handleSwipe(n:Number):void {
+				pressTimer.stop();
+				
+				var slideViewTransition:SlideViewTransition = new SlideViewTransition();
+				slideViewTransition.duration = 300;
+				
+				switch (n) {
+					case -1:
+						slideViewTransition.direction = ViewTransitionDirection.LEFT;
+						if(navigator.activeView is HomeTabView && swipeToGroupEnabled) {
+							navigator.pushView(GroupEditTabView, visitorGroup, contextObj, slideViewTransition);
+						}
+						else if(navigator.activeView is EventTabView) {
+							navigator.pushView(HomeTabView, visitorGroup, contextObj, slideViewTransition);
+						}
+						break;
+					case 1:
+						slideViewTransition.direction = ViewTransitionDirection.RIGHT;
+						if(navigator.activeView is HomeTabView && swipeToEventEnabled) {
+							navigator.pushView(EventTabView, visitorGroup, contextObj, slideViewTransition);
+						}
+						else if(navigator.activeView is GroupEditTabView && !(navigator.activeView as GroupEditTabView).myAlert.isOpen) {
+							navigator.pushView(HomeTabView, visitorGroup, contextObj, slideViewTransition);
+						}
+						break;
+					case 2:
+						slideViewTransition.direction = ViewTransitionDirection.UP;
+						if(navigator.activeView is WelcomeTabView && !swipeToRoomEnabled) {
+							navigator.pushView(HomeTabView, startExitDico, contextObj, slideViewTransition);
+						}
+						break;
+					case 3:
+						slideViewTransition.direction = ViewTransitionDirection.DOWN;
+						navigator.pushView(WelcomeTabView, null, contextObj, slideViewTransition);
+						break;
+				}
+			}
+		]]>
+	</fx:Script>
+	
+	<fx:Metadata>
+		[ResourceBundle("resources")]
+	</fx:Metadata>
+	
+</s:ViewNavigatorApplication>

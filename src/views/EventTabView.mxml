@@ -1,0 +1,133 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:View xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		xmlns:s="library://ns.adobe.com/flex/spark" actionBarVisible="false" tabBarVisible="false" backgroundColor="#333333" viewDeactivate="saveEvents()" viewActivate="retrieveEvents(event)">
+	
+	<fx:Script>
+		<![CDATA[
+			import comps.ExtendedEventButton;
+			
+			import spark.events.ViewNavigatorEvent;
+			import spark.layouts.TileLayout;
+			
+			private var vg:VisitorGroup;
+			private var groupMember:GroupMember;
+			private var b:ExtendedEventButton;
+			private var deleting:Boolean = false;
+			
+			protected function addEventAction(event:MouseEvent):void {
+				b = new ExtendedEventButton();
+				b.label = (event.currentTarget as Button).label;
+				b.d = new Date();
+				
+				var canAdd:Boolean = true;
+				for each (var eb:Button in selectedEventTypes) {
+					if(eb.label == b.label) {
+						canAdd = false;
+					}
+				}
+				
+				if(canAdd) {
+					selectedEventTypes.addItem(b);
+				}
+			}
+			
+			protected function addEventTool(event:MouseEvent):void {
+				if(selectedEventTypes.length > 0) {
+					b = selectedEventTypes.getItemAt(selectedEventTypes.length-1) as ExtendedEventButton;
+					var laab:String = b.label;
+					
+					if((b.label as String).indexOf("@") == -1) {
+						laab = laab + " @ " + event.currentTarget.label;
+						
+						var canAdd:Boolean = true;
+						for each (var eb:Button in selectedEventTypes) {
+							if(eb.label == laab) {
+								canAdd = false;
+							}
+						}
+						
+						if(canAdd) {
+							b.label = laab;
+							selectedEventTypes.removeItemAt(selectedEventTypes.length - 1);
+							selectedEventTypes.addItem(b);
+						}
+					}
+				}
+			}
+			
+			protected function saveEvents():void {
+				if(!deleting) {
+					vg = data as VisitorGroup;
+					if(vg.selectedMember == -1) {
+						vg.updateGroupSelectedActions(selectedEventTypes);
+						vg.updateEventNotes(noteArea.text);
+					}
+					else {
+						groupMember = vg.members.getItemAt(vg.selectedMember) as GroupMember;
+						groupMember.updateMemberSelectedActions(selectedEventTypes);
+						groupMember.updateEventNotes(noteArea.text);
+					}
+				}
+			}
+			
+			protected function retrieveEvents(event:ViewNavigatorEvent):void {
+				vg = data as VisitorGroup;
+				if(vg.selectedMember == -1) {
+					selectedEventTypes = vg.retrieveGroupSelectedActions();
+					noteArea.text = vg.retrieveGroupEventNotes();
+				}
+				else {
+					groupMember = vg.members.getItemAt(vg.selectedMember) as GroupMember;
+					selectedEventTypes = groupMember.retrieveMemberSelectedActions();
+					noteArea.text = groupMember.retrieveGroupEventNotes();
+				}
+			}
+			
+		]]>
+	</fx:Script>
+	
+	<fx:Declarations>
+		<s:ArrayCollection id="eventTypes">
+			<s:Button label="reading" chromeColor="#333333" color="#FFFFFF" click="addEventAction(event)"/>
+			<s:Button label="talking" chromeColor="#333333" color="#FFFFFF" click="addEventAction(event)"/>
+			<s:Button label="technical interaction" chromeColor="#333333" color="#FFFFFF" click="addEventAction(event)"/>
+			<s:Button label="looking" chromeColor="#333333" color="#FFFFFF" click="addEventAction(event)"/>
+			<s:Button label="sitting" chromeColor="#333333" color="#FFFFFF" click="addEventAction(event)"/>
+			<s:Button label="taking picture" chromeColor="#333333" color="#FFFFFF" click="addEventAction(event)"/>
+		</s:ArrayCollection>
+		<s:ArrayCollection id="eventTools">
+			<s:Button label="walltext" chromeColor="#333333" color="#FFFFFF" click="addEventTool(event)"/>
+			<s:Button label="screen" chromeColor="#333333" color="#FFFFFF" click="addEventTool(event)"/>
+			<s:Button label="personal item" chromeColor="#333333" color="#FFFFFF" click="addEventTool(event)"/>
+			<s:Button label="phone" chromeColor="#333333" color="#FFFFFF" click="addEventTool(event)"/>
+			<s:Button label="painting" chromeColor="#333333" color="#FFFFFF" click="addEventTool(event)"/>
+		</s:ArrayCollection>
+		<s:ArrayCollection id="selectedEventTypes" />
+	</fx:Declarations>
+	
+	<s:BorderContainer top="5" borderColor="#999999" backgroundAlpha=".2" horizontalCenter="0" minHeight="10">
+		<s:Label color="#FFFFFF" fontSize="20" textDecoration="underline" text="Event Interactions" left="20" right="20" top="15" bottom="15" />
+	</s:BorderContainer>
+	
+	<s:HGroup width="500" top="100" left="40" bottom="40">
+		<s:VGroup width="100%">
+			<s:Label color="#FFFFFF" fontSize="16" text="Behaviors:" textDecoration="underline"/>
+			<s:DataGroup width="100%" layout="{new TileLayout()}" dataProvider="{eventTypes}"/>
+		</s:VGroup>
+		<s:VGroup width="100%">
+			<s:Label color="#FFFFFF" fontSize="16" text="Resources:" textDecoration="underline"/>
+			<s:DataGroup width="100%" layout="{new TileLayout()}" dataProvider="{eventTools}"/>
+		</s:VGroup>
+	</s:HGroup>
+	
+	<s:VGroup top="100" width="350" right="40" bottom="40">
+		<s:Label color="#FFFFFF" fontSize="16" text="Interaction Log:" textDecoration="underline"/>
+		<s:List width="100%" height="100%" id="selectedEvents" dataProvider="{selectedEventTypes}" itemRenderer="renderers.SelectedEventRenderer" verticalScrollPolicy="off"/>
+	</s:VGroup>
+	<s:VGroup bottom="40" left="40">
+		<s:Label color="#FFFFFF" fontSize="16" text="Notes:" textDecoration="underline"/>
+		<s:TextArea id="noteArea" width="400" height="100" />
+		<s:Spacer height="20" />
+		<s:Button label="DELETE EVENT" chromeColor="#333333" color="#FFFFFF" click="deleting=true;dispatchEvent(new Event(MunchObserver.DELETE_EVENT, true))" />
+	</s:VGroup>
+</s:View>

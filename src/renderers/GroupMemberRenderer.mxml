@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:ItemRenderer xmlns:fx="http://ns.adobe.com/mxml/2009" 
+					xmlns:s="library://ns.adobe.com/flex/spark" minHeight="50">
+	
+	<fx:Script>
+		<![CDATA[
+			import listeners.DeleteMemberEvent;
+			protected function removeMember(event:MouseEvent):void {
+				var dme:DeleteMemberEvent = new DeleteMemberEvent(MunchObserver.DELETE_MEMBER, true);
+				dme.gm = data as GroupMember;
+				dispatchEvent(dme);
+			}
+		]]>
+	</fx:Script>
+	
+	
+	<fx:Declarations>
+		<s:SolidColor id="bord" color="#333333"/>
+		<s:SolidColor id="princ" color="{(data as GroupMember).color}"/>
+	</fx:Declarations>
+	
+	<s:HGroup width="100%" verticalAlign="middle">
+		<s:Group width="50">
+			<s:Ellipse fill="{bord}" width="34" height="34" horizontalCenter="0" verticalCenter="0"/>
+			<s:Ellipse fill="{princ}" width="30" height="30" horizontalCenter="0" verticalCenter="0"/>
+		</s:Group>
+		<s:Label text="{(data as GroupMember).genre}" textAlign="center" width="100%"/>
+		<s:Label text="{(data as GroupMember).age}" textAlign="center" width="100%"/>
+		<s:Label text="{(data as GroupMember).origin}" textAlign="center" width="100%"/>
+		<s:Group width="50" height="100%">
+			<s:Image id="delButton" source="@Embed('assets/del.png')" cacheAsBitmap="true" smooth="true" smoothingQuality="default" horizontalCenter="0" verticalCenter="0" click="removeMember(event)"/>
+		</s:Group>
+	</s:HGroup>
+</s:ItemRenderer>

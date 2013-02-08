@@ -1,0 +1,4 @@
+SMTP_SERVER=your_smtp_server
+SMTP_PORT=your_smtp_server_port
+SMTP_LOGIN=your_login
+SMTP_PASSWORD=your_password

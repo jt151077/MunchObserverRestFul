@@ -1,0 +1,421 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:View xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		xmlns:s="library://ns.adobe.com/flex/spark" actionBarVisible="false" tabBarVisible="false" viewActivate="onActive(event)" xmlns:comps="comps.*">
+	<fx:Script>
+		<![CDATA[
+			import air.net.URLMonitor;
+			
+			import com.pfp.events.JPEGAsyncCompleteEvent;
+			import com.pfp.utils.JPEGAsyncEncoder;
+			
+			import comps.Blob;
+			import comps.ExtendedEventButton;
+			
+			import flash.utils.getQualifiedClassName;
+			
+			import mx.collections.ArrayCollection;
+			import mx.graphics.SolidColorStroke;
+			import mx.managers.CursorManager;
+			import mx.rpc.events.FaultEvent;
+			import mx.rpc.events.ResultEvent;
+			
+			import org.osmf.layout.ScaleMode;
+			
+			import ru.inspirit.net.MultipartURLLoader;
+			
+			import spark.collections.Sort;
+			import spark.collections.SortField;
+			import spark.events.ViewNavigatorEvent;
+			import spark.primitives.Line;
+			
+			private var vg:VisitorGroup;
+			private var asyncEncoder:JPEGAsyncEncoder;
+			private var formattedResultArray:ArrayCollection;
+			private var formattedMemberArray:ArrayCollection;
+			private var ba1:ByteArray;
+			private var ba2:ByteArray;
+			private var ba3:ByteArray;
+			private var compoInterval:Number;
+			[Bindable] private var sessionEmail:String;
+			private var so:SharedObject;
+			[Bindable] private var startExitDico:Dictionary;
+			
+			private var ml:MultipartURLLoader;
+			
+			
+			public function onActive(event:ViewNavigatorEvent):void {
+				background.source = navigator.context.map;
+				floor.removeAllElements();
+				vg = data as VisitorGroup;
+				
+				so = SharedObject.getLocal("munchobs");
+				
+				if(vg == null) {
+					startExitDico = data as Dictionary;
+					currentState = "noGroup";
+				}
+				else {
+					startExitDico = (data as VisitorGroup).startExitDico;
+					currentState = "hasGroup";
+					
+					if(vg.selectedMember == -1) {
+						activeColor.color = MunchObserver.COLOR_GROUP;	
+					}
+					else {
+						activeColor.color = (vg.members.getItemAt(vg.selectedMember) as GroupMember).color;
+					}
+
+					//display members blobs
+					for each (var memb:GroupMember in vg.members) {
+						printBlobs(memb.spots, memb.color);
+					}
+					
+					printBlobs(vg.spots, MunchObserver.COLOR_GROUP);
+				}
+			}
+			
+			private function printBlobs(blobArray:Dictionary, col:Number):void {
+				var prevBlob:Blob = null;
+				var scs:SolidColorStroke = new SolidColorStroke();
+				var li:Line;
+				scs.weight = 2
+				scs.color = col;
+				var ind:Number = 0;
+				if(col == MunchObserver.COLOR_GROUP) {
+					ind = floor.numElements;
+				}
+				
+				for each (var o:Object in sortDictionaryByValue(blobArray)) {
+					if(prevBlob != null) {
+						li = new Line();
+						li.xFrom = prevBlob.x+MunchObserver.BLOB_SIDE/2;
+						li.xTo = (o.value as Blob).x+MunchObserver.BLOB_SIDE/2;
+						li.yFrom = prevBlob.y+MunchObserver.BLOB_SIDE/2;
+						li.yTo = (o.value as Blob).y+MunchObserver.BLOB_SIDE/2;
+						li.stroke = scs;
+						floor.addElementAt(li, ind);
+					}
+					
+					prevBlob = floor.addElement((o.value as Blob)) as Blob;
+				}
+			}
+			
+			private function sortDictionaryByValue(d:Dictionary):Array {
+				var a:Array = new Array();
+				for (var dictionaryKey:Object in d) {
+					a.push({key:dictionaryKey,value:d[dictionaryKey]});
+				}
+				a.sortOn("key",[Array.NUMERIC|Array.NUMERIC]);
+				return a;
+			}   
+			
+			protected function saveResultsNoHandler(event:MouseEvent):void {
+				saveResultsPop.close();
+				floor.removeAllElements();
+				currentState = "noGroup";
+				dispatchEvent(new Event(MunchObserver.RESET_APP, true));
+			}
+			
+			protected function saveResultsYesHandler(event:MouseEvent):void {
+				var compositionBitmapData:BitmapData = new BitmapData(background.width,background.height);
+				var floorBM:BitmapImage = new BitmapImage();
+				floorBM.source = background.bitmapData;
+				floorBM.scaleMode = ScaleMode.STRETCH;
+				floorBM.percentWidth = 100;
+				floorBM.percentHeight = 100;
+				floor.addElementAt(floorBM, 0);
+				compoInterval = setInterval(sendIt, 2000, compositionBitmapData);
+			}
+			
+			private function sendIt(cbd:BitmapData):void {
+				clearInterval(compoInterval);
+				cbd.draw(floor);
+				
+				asyncEncoder = new JPEGAsyncEncoder(100);
+				asyncEncoder.PixelsPerIteration = 128;
+				asyncEncoder.addEventListener(JPEGAsyncCompleteEvent.JPEGASYNC_COMPLETE, asyncComplete);
+				asyncEncoder.encode(cbd);
+			}
+			
+			private function handleTestFault(evt:FaultEvent):void {
+				trace("service down. We must archive these data to send them later");
+				
+				saveResultsPop.close();
+				floor.removeAllElements();
+				currentState = "noGroup";
+				CursorManager.removeBusyCursor();
+				dispatchEvent(new Event(MunchObserver.RESET_APP, true));
+			}
+			
+			
+			private function handleTestResult(evt:ResultEvent):void {
+				if(evt.statusCode == 200) {
+					ml.load(MunchObserver.SERVICE_URL + "/upload", false);
+					
+					formattedResultArray = getSpotsFormattedResults();
+					for each (var b:BlobObject in formattedResultArray) {
+						sinatraService.url = MunchObserver.SERVICE_URL + "/spots";
+						sinatraService.method = "POST";
+						b.buid = d.time;
+						sinatraService.send(b);
+					}
+					
+					var sessionBeg:Date = (formattedResultArray.getItemAt(0) as BlobObject).date as Date;
+					var sessionEnd:Date = (formattedResultArray.getItemAt(formattedResultArray.length-1) as BlobObject).date as Date;
+					var duration:Number = sessionEnd.time - sessionBeg.time;
+					
+					var memberObject:Object;
+					for each (var m:GroupMember in vg.members) {
+						memberObject = new Object();
+						memberObject.genre = m.genre;
+						memberObject.age = m.age;
+						memberObject.origin = m.origin;
+						memberObject.otext = m.originText;
+						memberObject.color = m.color;
+						memberObject.buid = d.time;
+						memberObject.artefacts = getFormattedArtefacts(m.artefacts);
+						
+						sinatraService.url = MunchObserver.SERVICE_URL + "/members";
+						sinatraService.method = "POST";
+						sinatraService.send(memberObject);
+					}
+					
+					if(vg.note != "") {
+						var noteObject:Object = new Object();
+						noteObject.content = vg.note;
+						noteObject.buid = d.time;
+						
+						sinatraService.url = MunchObserver.SERVICE_URL + "/notes";
+						sinatraService.method = "POST";
+						sinatraService.send(noteObject);
+					}
+					
+					sinatraService.url = MunchObserver.SERVICE_URL + "/sessions/"+d.time+"/"+getQualifiedClassName(navigator.context.map)+"/"+duration;
+					sinatraService.method = "POST";
+					sinatraService.send(noteObject);
+					
+					saveResultsPop.close();
+					floor.removeAllElements();
+					currentState = "noGroup";
+					CursorManager.removeBusyCursor();
+					dispatchEvent(new Event(MunchObserver.RESET_APP, true));
+				}
+				else {
+					trace("service down. We must archive these data to send them later");
+				}
+			}
+			
+			private var _d:Date;
+			
+			private function asyncComplete(event:JPEGAsyncCompleteEvent):void {
+				
+				d = new Date();
+				
+				sessionEmail = so.data.email;
+				
+				ml = new MultipartURLLoader();
+				ml.addFile(event.ImageData, d.time+".jpg", "file");
+				ml.loader.addEventListener(IOErrorEvent.IO_ERROR, function handleIo(e:IOErrorEvent):void {
+					trace(e);	
+				});
+				ml.loader.addEventListener(HTTPStatusEvent.HTTP_RESPONSE_STATUS, function handleStatus(e:HTTPStatusEvent):void {
+					trace(e);	
+				});
+				
+				var sinatraTestService:HTTPService = new HTTPService();
+				sinatraTestService.url = MunchObserver.SERVICE_URL + "/servicetest";
+				sinatraTestService.method = "GET";
+				sinatraTestService.addEventListener(ResultEvent.RESULT, handleTestResult);
+				sinatraTestService.addEventListener(FaultEvent.FAULT, handleTestFault);
+				sinatraTestService.send();
+			}
+			
+			private function getFormattedArtefacts(ar:ArrayCollection):String {
+				var arte:String = "";
+				
+				for each (var o:Object in ar) {
+					if(o.selected) {
+						arte = arte + o.lab + "/";		
+					}
+				}
+				
+				if(arte.length > 2) {
+					arte = arte.substring(0, arte.length-1)
+				}
+				
+				return arte;
+				
+			}
+			
+			private function getSpotsFormattedResults():ArrayCollection {
+				var resSpotArray:ArrayCollection = new ArrayCollection();
+				
+				for each (var b:Blob in vg.spots) {
+					resSpotArray.addItem(getEntryFromBlob(b));
+				}
+				
+				for each (var m:GroupMember in vg.members) {
+					for each (var bb:Blob in m.spots) {
+						resSpotArray.addItem(getEntryFromBlob(bb));
+					}
+				}
+				
+				var dateSort:Sort = new Sort();
+				dateSort.fields = [new SortField("date", false, false)];
+				resSpotArray.sort = dateSort; 
+				resSpotArray.refresh();
+				
+				return resSpotArray;
+			}
+			
+			private function getEntryFromBlob(b:Blob):Object {
+				var entry:BlobObject = new BlobObject();
+				entry.date = b.createdAt;
+				entry.timestp = (b.createdAt as Date).getTime();
+				entry.color = b.colorCode;
+				entry.pos = b.counter;
+				entry.xcoord = b.x;
+				entry.ycoord = b.y;
+				entry.enotes = b.eventNotes;
+				entry.actions = getFormattedActions(b.selectedActions);
+				return entry;
+			}
+			
+			private function getFormattedActions(act:ArrayCollection):String {
+				var resultStr:String = "";
+				
+				for each (var b:ExtendedEventButton in act) {
+					resultStr = resultStr + b.label + " (" + b.d.toString() + ") / ";
+				}
+				
+				if(resultStr.length > 2) {
+					resultStr = resultStr.substr(0, resultStr.length-3);
+				}
+				
+				return resultStr;
+			}
+			
+			private function getLabelList(li:ArrayCollection):String {
+				var labels:String = "";
+				for each (var b:Button in li)  {
+					labels = labels + b.label + ", ";
+				}
+				return labels;
+			}
+			
+			private function handleSureExit(event:MouseEvent):void {
+				sureToExitPop.close();	
+				if((event.currentTarget as Button).label == "YES") {
+					dispatchEvent(new Event(MunchObserver.CONFIRM_EXIT, true))
+				}
+				else {
+					exitButton.visible = true;
+				}
+			}
+			
+			protected function emailPopCloseHandler(event:MouseEvent):void {
+				emailPop.close();
+				so.data.email = newmail.text;
+				so.flush();
+			}
+			
+			protected function confButtonHandler(event:MouseEvent):void
+			{
+				so = SharedObject.getLocal("munchobs");
+				sessionEmail = so.data.email;
+				emailPop.open(this, true);
+			}
+			
+			protected function sinatraService_resultHandler(event:ResultEvent):void {
+				trace(event.result);
+			}
+			
+			protected function sinatraService_faultHandler(event:FaultEvent):void {
+				
+			}
+
+			private function get d():Date
+			{
+				return _d;
+			}
+
+			private function set d(value:Date):void
+			{
+				_d = value;
+			}
+
+			
+		]]>
+	</fx:Script>
+	
+	<fx:Declarations>
+		<s:SkinnablePopUpContainer id="saveResultsPop" width="{this.width}" height="{this.height}" backgroundAlpha=".5">
+			<s:Panel title="Saving results:" chromeColor="#333333" color="#FFFFFF"  horizontalCenter="0" verticalCenter="0">
+				<s:VGroup paddingTop="20" gap="40" top="40" bottom="40" left="40" right="40" horizontalAlign="center">
+					<s:Label text="Do you want to save the session for this group?" color="#333333" fontSize="20"/>
+					<s:HGroup bottom="10">
+						<s:Button label="YES" click="saveResultsYesHandler(event);CursorManager.setBusyCursor();currentState='encoding'" bottom="10" width="100" chromeColor="#333333" color="#FFFFFF" excludeFrom="encoding"/>
+						<s:Button label="NO" click="saveResultsNoHandler(event)" bottom="10" width="100" chromeColor="#333333" color="#FFFFFF" excludeFrom="encoding"/>
+					</s:HGroup>
+				</s:VGroup>
+			</s:Panel>
+		</s:SkinnablePopUpContainer>
+		<s:SkinnablePopUpContainer id="sureToExitPop" width="{this.width}" height="{this.height}" backgroundAlpha=".5">
+			<s:Panel title="Terminate session:" chromeColor="#333333" color="#FFFFFF"  horizontalCenter="0" verticalCenter="0">
+				<s:VGroup paddingTop="20" gap="40" top="40" bottom="40" left="40" right="40" horizontalAlign="center">
+					<s:Label text="Terminate group session?" color="#333333" fontSize="20"/>
+					<s:HGroup bottom="10">
+						<s:Button label="YES" click="handleSureExit(event)" bottom="10" width="100" chromeColor="#333333" color="#FFFFFF"/>
+						<s:Button label="NO" click="handleSureExit(event)" bottom="10" width="100" chromeColor="#333333" color="#FFFFFF"/>
+					</s:HGroup>
+				</s:VGroup>
+			</s:Panel>
+		</s:SkinnablePopUpContainer>
+		<s:SkinnablePopUpContainer id="emailPop" width="{this.width}" height="{this.height}" backgroundAlpha=".5">
+			<s:Panel title="Session email:" chromeColor="#333333" color="#FFFFFF"  horizontalCenter="0" verticalCenter="0">
+				<s:VGroup paddingTop="20" gap="40" top="40" bottom="40" left="40" right="40" horizontalAlign="center">
+					<s:Label text="All reports will be sent to the following email address:" color="#333333" fontSize="20"/>
+					<s:TextInput id="newmail" width="100%" text="{sessionEmail}" chromeColor="#333333" color="#333333"/>
+					<s:HGroup bottom="10">
+						<s:Button label="OK" click="emailPopCloseHandler(event)" bottom="10" width="100" chromeColor="#333333" color="#FFFFFF"/>
+					</s:HGroup>
+				</s:VGroup>
+			</s:Panel>
+		</s:SkinnablePopUpContainer>
+		
+		<s:HTTPService id="sinatraService" result="sinatraService_resultHandler(event)" fault="sinatraService_faultHandler(event)"  />
+	</fx:Declarations>
+	
+	<s:states>
+		<s:State name="noGroup" />
+		<s:State name="hasGroup" />
+		<s:State name="encoding" />
+	</s:states>
+	
+	<s:BitmapImage id="background" scaleMode="stretch" width="100%" height="100%" />
+	<s:BorderContainer backgroundColor="#333333" backgroundAlpha=".5" left="10" top="10" minWidth="10" minHeight="10" includeIn="hasGroup" enabled="false">
+		<s:Ellipse width="{MunchObserver.BLOB_SIDE/2}" height="{MunchObserver.BLOB_SIDE/2}" top="5" right="5" bottom="5" left="5">
+			<s:fill>
+				<s:SolidColor id="activeColor" />
+			</s:fill>
+		</s:Ellipse>
+	</s:BorderContainer>
+	<!--<s:BorderContainer backgroundAlpha="0" right="0" top="0" width="10" height="10" borderVisible="false">
+		<s:Ellipse width="100%" height="100%">
+			<s:fill>
+				<s:SolidColor color="{connected ? 0x00FF00 : 0xFF0000}"  />
+			</s:fill>
+		</s:Ellipse>
+	</s:BorderContainer>-->
+	<s:Group id="floor" width="100%" height="100%" />
+	<s:BorderContainer horizontalCenter="0" verticalCenter="0" includeIn="noGroup" backgroundColor="#333333" backgroundAlpha=".9" width="300">
+		<s:filters>
+			<s:DropShadowFilter angle="45" distance="10" alpha=".5"/>
+		</s:filters>
+		<s:Label fontSize="25" color="#FFFFFF" text="Click on the icon by the entrance to start a session!" textAlign="center" top="20" right="20" left="20" bottom="20" />
+	</s:BorderContainer>
+	<s:Image id="confButton" source="@Embed('assets/tools.jpg')" top="11" right="12" width="25" height="25" cacheAsBitmap="true" smooth="true" smoothingQuality="default" click="confButtonHandler(event)" />
+	<s:Image id="addButton" includeIn="noGroup" source="@Embed('assets/groupin.png')" scaleX="-1" bottom="{startExitDico[navigator.context.map][1]}" left="{startExitDico[navigator.context.map][0]}" cacheAsBitmap="true" smooth="true" smoothingQuality="default" click="dispatchEvent(new Event(MunchObserver.START_GROUP, true))" />
+	<s:Image id="exitButton" includeIn="hasGroup" source="@Embed('assets/groupout.png')" bottom="{startExitDico[navigator.context.map][3]}" left="{startExitDico[navigator.context.map][2]}" cacheAsBitmap="true" smooth="true" smoothingQuality="default" click="exitButton.visible=false;dispatchEvent(new Event(MunchObserver.EXIT_GROUP, true))" />
+</s:View>
+ 

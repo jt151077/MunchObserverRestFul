@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:ItemRenderer xmlns:fx="http://ns.adobe.com/mxml/2009" 
+					xmlns:s="library://ns.adobe.com/flex/spark" height="50">
+	
+	<fx:Script>
+		<![CDATA[
+			import listeners.DeleteMuseumEvent;
+			
+			import spark.components.Button;
+			
+			protected function removeEvent():void {
+				var dme:DeleteMuseumEvent = new DeleteMuseumEvent(MunchObserver.DELETE_MUSEUM_EVENT, true);
+				dme.museumEvent = data as Button;
+				dispatchEvent(dme);
+			}
+		]]>
+	</fx:Script>
+	
+	<s:BorderContainer width="100%" height="100%" backgroundColor="#CCCCCC" borderColor="#333333" minHeight="20">
+		<s:HGroup width="100%" height="100%" verticalAlign="middle">
+			<s:Label text="{data.label}" textAlign="center" height="100%" width="100%" verticalAlign="middle" fontSize="20" fontWeight="bold"/>
+			<s:Group width="50" height="100%">
+				<s:Image id="delButton" source="@Embed('assets/del.png')" cacheAsBitmap="true" smooth="true" smoothingQuality="default" horizontalCenter="0" verticalCenter="0" click="removeEvent()"/>
+			</s:Group>
+		</s:HGroup>
+	</s:BorderContainer>
+	
+</s:ItemRenderer>

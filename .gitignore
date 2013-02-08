@@ -1,0 +1,14 @@
+
+.settings/org.eclipse.core.resources.prefs
+
+.flexProperties
+
+.actionScriptProperties
+
+MunchObserver.apk
+
+MunchObserver.ipa
+
+bin-debug/*
+
+src/locale/en_US/resources.properties

@@ -1,0 +1,260 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:View xmlns:fx="http://ns.adobe.com/mxml/2009"
+		xmlns:s="library://ns.adobe.com/flex/spark"
+		actionBarVisible="false" backgroundColor="#333333" overlayControls="false"
+		tabBarVisible="false" viewActivate="initView(event)" viewDeactivate="saveNotes()">
+	
+	<fx:Script>
+		<![CDATA[
+			import listeners.AddMemberEvent;
+			
+			import spark.events.ViewNavigatorEvent;
+			import spark.layouts.TileLayout;
+			
+			private var gM:GroupMember;
+			
+			protected function addMember():void {
+				gM = new GroupMember;
+				if(genre.selectedIndex > -1) {
+					gM.genre = genre.selectedItem;
+				}
+				
+				if(age.selectedIndex > -1) {
+					gM.age = age.selectedItem;
+				}
+				
+				if(origin.selectedIndex > -1) {
+					gM.origin = origin.selectedItem;
+					if(origin.selectedIndex == 2) {
+						gM.originText = originInput.text;
+					}
+				}
+				
+				gM.addNewMemberSpot((data as VisitorGroup).startExitDico[navigator.context.map][4], (data as VisitorGroup).startExitDico[navigator.context.map][5], (data as VisitorGroup).firstSpotUid);
+				
+				arteLabel.text = "Selected artefacts: 0";
+				
+				memberList.selectedIndex = -1;
+				updateFollowLabel();
+				
+				var agm:AddMemberEvent = new AddMemberEvent(MunchObserver.ADD_MEMBER, true);
+				agm.gm = gM;
+				dispatchEvent(agm);
+			}
+			
+			private function writeArtefacts():void {
+				var arteCounter:Number = 0;
+				if(data.selectedMember != -1) {
+					gM = (data as VisitorGroup).members.getItemAt(data.selectedMember) as GroupMember;
+					var o:Object;
+					gM.artefacts.removeAll();
+					for each (var c:CheckBox in artfeactsArray) {
+						o = new Object();
+						o.lab = c.label;
+						if(c.selected) {
+							o.selected = true;
+							arteCounter++;
+						}
+						else {
+							o.selected = false;
+						}
+						gM.artefacts.addItem(o);
+							
+					}
+				}
+				arteLabel.text = "Selected artefacts: "+arteCounter;
+			}
+			
+			private function artefactsClicked():void {
+				if(data.selectedMember != -1) {
+					gM = (data as VisitorGroup).members.getItemAt(data.selectedMember) as GroupMember;
+					if(gM.artefacts.length == artfeactsArray.length) {
+						for (var i:int = 0; i < gM.artefacts.length; i++) {
+							(artfeactsArray.getItemAt(i) as CheckBox).selected = gM.artefacts.getItemAt(i).selected;
+						}
+					}
+				}
+				else {
+					for each (var c:CheckBox in artfeactsArray) {
+						c.selected = false;
+					}
+				}
+				
+				myAlert.open(this, true);
+			}
+			
+			private function writeToMember():void {
+				if(memberList.selectedIndex > -1) {
+					updateMember((data as VisitorGroup).members.getItemAt(memberList.selectedIndex) as GroupMember);
+				}
+			}
+			
+			private function updateMember(member:GroupMember):GroupMember {
+				if(genre.selectedIndex > -1) {
+					member.genre = genre.selectedItem;
+				}
+				else {
+					member.genre = null;
+				}
+				
+				if(age.selectedIndex > -1) {
+					member.age = age.selectedItem;
+				}
+				else {
+					member.age = null;
+				}
+				
+				if(origin.selectedIndex > -1) {
+					member.origin = origin.selectedItem;
+					member.originText = originInput.text;
+				}
+				else {
+					member.origin = null;
+				}
+				
+				return member;
+			}
+			
+			private function saveNotes():void {
+				(data as VisitorGroup).note = noteArea.text;
+				(data as VisitorGroup).selectedMember = memberList.selectedIndex;
+				refreshCurrentUser();
+				updateFollowLabel();
+			}
+			
+			protected function initView(event:ViewNavigatorEvent):void {
+				if(data.members.length == 4) {
+					currentState = "groupFull";
+				}
+				
+				memberList.selectedIndex = data.selectedMember;
+				saveNotes();
+			}
+			
+			private function refreshCurrentUser():void {
+				if(data.selectedMember != -1) {
+					gM = (data as VisitorGroup).members.getItemAt(data.selectedMember) as GroupMember;
+					
+					if(gM.genre != null) {
+						genre.selectedItem = gM.genre;
+					}
+					else {
+						genre.selectedIndex = -1;
+					}
+					
+					if(gM.age != null) {
+						age.selectedItem = gM.age;
+					}
+					else {
+						age.selectedIndex = -1;
+					}
+					
+					if(gM.origin != null) {
+						origin.selectedItem = gM.origin;
+						originInput.text = gM.originText;
+					}
+					else {
+						origin.selectedIndex = -1;
+						originInput.text = "";
+					}
+					
+					var o:Object;
+					var arteCounter:Number = 0;
+					for (var i:int = 0; i < gM.artefacts.length; i++) {
+						o = gM.artefacts.getItemAt(i);
+						if(o.selected) {
+							artfeactsArray.getItemAt(i).selected = true;
+							arteCounter++;							
+						}
+					}
+					arteLabel.text = "Selected artefacts: "+arteCounter;
+				}
+				else {
+					genre.selectedIndex = -1;
+					age.selectedIndex = -1;
+					origin.selectedIndex = -1;
+				}
+			}
+			
+			private function updateFollowLabel():void {
+				switch(memberList.selectedIndex) {
+					case -1:
+						followingLabel.text = "Following: Group";
+						break;
+					case 0:
+						followingLabel.text = "Following: Member 1";
+						break;
+					case 1:
+						followingLabel.text = "Following: Member 2";
+						break;
+					case 2:
+						followingLabel.text = "Following: Member 3";
+						break;
+					case 3:
+						followingLabel.text = "Following: Member 4";
+						break;
+				}
+			}
+			
+		]]>
+	</fx:Script>
+	
+	<fx:Declarations>
+		<s:ArrayCollection id="artfeactsArray">
+			<s:CheckBox label="audioguide" chromeColor="#FFFFFF" color="#333333"  />
+			<s:CheckBox label="guidebook" chromeColor="#FFFFFF" color="#333333"  />
+			<s:CheckBox label="museum brochure" chromeColor="#FFFFFF" color="#333333"  />
+			<s:CheckBox label="phone" chromeColor="#FFFFFF" color="#333333"  />
+			<s:CheckBox label="tablet" chromeColor="#FFFFFF" color="#333333"  />
+			<s:CheckBox label="postcard(s)" chromeColor="#FFFFFF" color="#333333"  />
+		</s:ArrayCollection>
+		
+		<s:SkinnablePopUpContainer id="myAlert" width="{this.width}" height="{this.height}" backgroundAlpha=".5">
+			<s:Panel title="Pick some artefacts:" chromeColor="#333333" color="#FFFFFF"  horizontalCenter="0" verticalCenter="0">
+				<s:VGroup paddingTop="20" gap="40" top="40" bottom="40" left="40" right="40">
+					<s:DataGroup top="40" left="40" right="40" bottom="70" layout="{new TileLayout()}" dataProvider="{artfeactsArray}"/>
+					<s:Button label="OK" click="myAlert.close();writeArtefacts();" bottom="10" chromeColor="#333333" color="#FFFFFF"/>
+				</s:VGroup>
+			</s:Panel>
+		</s:SkinnablePopUpContainer>
+	</fx:Declarations>
+	
+	<s:states>
+		<s:State name="normal" />
+		<s:State name="groupFull" />
+	</s:states>
+	
+	<s:BorderContainer top="5" borderColor="#999999" backgroundAlpha=".2" horizontalCenter="0" minHeight="10">
+		<s:Label color="#FFFFFF" fontSize="20" textDecoration="underline" text="Group Composition" left="20" right="20" top="15" bottom="15" />
+	</s:BorderContainer>
+	
+	<s:VGroup id="selectionFields" left="40" top="100" gap="20">
+		<s:HGroup verticalAlign="middle">
+			<s:ButtonBar id="genre" chromeColor="#333333" color="#FFFFFF" dataProvider="{MunchObserver.GENRE}" change="writeToMember()"/> 
+		</s:HGroup>
+		<s:HGroup verticalAlign="middle">
+			<s:ButtonBar id="age" chromeColor="#333333" color="#FFFFFF" dataProvider="{MunchObserver.AGE}" change="writeToMember()" /> 
+		</s:HGroup>
+		<s:HGroup verticalAlign="middle">
+			<s:ButtonBar id="origin" chromeColor="#333333" color="#FFFFFF" change="writeToMember()" dataProvider="{MunchObserver.ORIGIN}" /> 
+			<s:TextInput id="originInput" text="" change="writeToMember()" width="175"/>
+		</s:HGroup>
+		<s:HGroup verticalAlign="middle" width="500">
+			<s:Button label="ARTEFACTS" click="artefactsClicked()" chromeColor="#333333" color="#FFFFFF" />
+			<s:Label height="100%" id="arteLabel" color="#FFFFFF" fontSize="15" textAlign="left" verticalAlign="middle"/>
+		</s:HGroup>
+		<s:Button label="ADD MEMBER" click="addMember()" enabled.groupFull="false"/>
+	</s:VGroup>
+	
+	<s:VGroup top="100" gap="20" right="40">
+		<s:TextArea id="noteArea" width="400" height="{selectionFields.height}" text="{data.note}" />
+	</s:VGroup>
+	
+	<s:VGroup left="40" right="40" top="470" gap="20" horizontalAlign="right">
+		<s:HGroup width="100%" horizontalAlign="right">
+			<s:Label height="100%" id="followingLabel" color="#FFFFFF" fontSize="20" textAlign="left" width="100%" verticalAlign="bottom"/>
+			<s:Button label="GROUP" click="memberList.selectedIndex=-1;updateFollowLabel()" />
+		</s:HGroup>
+		<s:List id="memberList" height="200" width="100%" dataProvider="{data.members}" allowMultipleSelection="false" change="saveNotes()" itemRenderer="renderers.GroupMemberRenderer" />
+	</s:VGroup>
+</s:View>
